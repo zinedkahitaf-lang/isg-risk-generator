@@ -214,7 +214,7 @@ else:
 
 with st.form("risk_form"):
     workplace = st.text_input("İşyeri / Sektör Tanımı:", placeholder="Örn: Mobilya Atölyesi, Demir Çelik Fabrikası, İnşaat Şantiyesi...")
-    risk_count = st.slider("Oluşturulacak Risk Sayısı:", min_value=10, max_value=50, value=50, step=10)
+    risk_count = st.slider("Oluşturulacak Risk Sayısı:", min_value=10, max_value=100, value=50, step=10)
     submitted = st.form_submit_button("Analizi Oluştur 🚀")
 
 if submitted:
