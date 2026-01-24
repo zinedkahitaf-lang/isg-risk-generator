@@ -32,66 +32,96 @@ def get_risk_level(score):
     else:
         return RISK_LEVELS["onemsiz"]
 
-def fetch_risks_from_openai(api_key, workplace):
-    """OpenAI API'den risk analizi al"""
+def fetch_risks_in_batches(api_key, workplace, total_items=50, batch_size=10):
+    """Risk analizini parça parça (batch) al"""
     import httpx
+    import time
     
-    # httpx client ile OpenAI oluştur (Render için 5 dakika timeout)
-    http_client = httpx.Client(timeout=httpx.Timeout(600.0, connect=60.0))
+    all_risks = []
+    # httpx client ile OpenAI oluştur (Render için timeout ayarı)
+    http_client = httpx.Client(timeout=httpx.Timeout(120.0, connect=60.0))
     client = openai.OpenAI(api_key=api_key, http_client=http_client)
-    
-    prompt = f"""
-    Sen uzman bir İSG (İş Sağlığı ve Güvenliği) mühendisisin.
-    Görev: '{workplace}' işyeri/sektörü için 30 adet detaylı risk değerlendirmesi yap.
-    
-    Fine Kinney Metodu değerleri:
-    - Olasılık (O): 0.2, 0.5, 1, 3, 6, 10
-    - Frekans (F): 0.5, 1, 2, 3, 6, 10
-    - Şiddet (Ş): 1, 3, 7, 15, 40, 100
-    
-    Çıktı formatı: Sadece saf JSON array döndür. Markdown bloğu kullanma.
-    Her obje şu anahtarları içermeli:
-    - sira_no (1'den 30'a kadar)
-    - faaliyet_alani (Örn: Genel Yönetim, Üretim Alanı, Depo, vb.)
-    - faaliyet_turu (Örn: Çalışma Ortamı, Makine Kullanımı, vb.)
-    - tehlike_tanimi (Detaylı tehlike açıklaması)
-    - risk_tanimi (Olası etki: yaralanma, ölüm, maddi hasar vb.)
-    - olasilik (Fine Kinney değeri)
-    - frekans (Fine Kinney değeri)
-    - siddet (Fine Kinney değeri)
-    - onlemler (DÖF - Düzeltici/Önleyici Faaliyetler, detaylı ve maddeler halinde)
-    - sorumlu (Örn: İşveren & İSG Uzmanı, Şantiye Sorumlusu vb.)
-    - sure (Aksiyon süresi: "Hemen", "1 Hafta", "1 Ay", "3 Ay" gibi göreceli süre - TARİH YAZMA!)
-    - sonraki_olasilik (DÖF sonrası düşürülmüş değer)
-    - sonraki_frekans (DÖF sonrası düşürülmüş değer)
-    - sonraki_siddet (DÖF sonrası düşürülmüş değer)
-    
-    KRİTİK KURALLAR:
-    1. DÖF sonrası Risk Skoru (O×F×Ş) KESİNLİKLE 70 veya altında olmalı!
-    2. Yeşil (≤20): Önemsiz Risk
-    3. Sarı (20-70): Olası Risk
-    4. Profesyonel ve teknik bir dil kullan.
-    5. "{workplace}" sektörüne/işyerine özel riskler üret.
-    6. MUTLAKA 2-3 adet 400 üstü (Tolerans Gösterilemez) risk olmalı! Bu çok önemli.
-    """
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7
-    )
-    
-    content = response.choices[0].message.content.strip()
-    
-    # Markdown temizliği
-    if content.startswith("```json"):
-        content = content[7:]
-    if content.startswith("```"):
-        content = content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-    
-    return json.loads(content)
+    num_batches = (total_items + batch_size - 1) // batch_size
+
+    for i in range(num_batches):
+        start_idx = i * batch_size + 1
+        current_batch_size = min(batch_size, total_items - len(all_risks))
+        
+        print(f"Batch {i+1}/{num_batches} işleniyor... (Başlangıç No: {start_idx})")
+        
+        prompt = f"""
+        Sen uzman bir İSG (İş Sağlığı ve Güvenliği) mühendisisin.
+        Görev: '{workplace}' işyeri/sektörü için {current_batch_size} adet detaylı risk değerlendirmesi yap.
+        ÖNEMLİ: Bu bir serinin parçasıdır. Risk numaraları {start_idx}'den başlayarak {start_idx + current_batch_size - 1}'e kadar gitmeli.
+
+        Fine Kinney Metodu değerleri:
+        - Olasılık (O): 0.2, 0.5, 1, 3, 6, 10
+        - Frekans (F): 0.5, 1, 2, 3, 6, 10
+        - Şiddet (Ş): 1, 3, 7, 15, 40, 100
+        
+        Çıktı formatı: Sadece saf JSON array döndür. Markdown bloğu kullanma.
+        Her obje şu anahtarları içermeli:
+        - sira_no (Integer olarak {start_idx} ile {start_idx + current_batch_size - 1} arası)
+        - faaliyet_alani (Örn: Genel Yönetim, Üretim Alanı, Depo, vb.)
+        - faaliyet_turu (Örn: Çalışma Ortamı, Makine Kullanımı, vb.)
+        - tehlike_tanimi (Detaylı tehlike açıklaması)
+        - risk_tanimi (Olası etki: yaralanma, ölüm, maddi hasar vb.)
+        - olasilik (Fine Kinney değeri)
+        - frekans (Fine Kinney değeri)
+        - siddet (Fine Kinney değeri)
+        - onlemler (DÖF - Düzeltici/Önleyici Faaliyetler, detaylı ve maddeler halinde)
+        - sorumlu (Örn: İşveren & İSG Uzmanı, Şantiye Sorumlusu vb.)
+        - sure (Aksiyon süresi: "Hemen", "1 Hafta", "1 Ay", "3 Ay" gibi göreceli süre - TARİH YAZMA!)
+        - sonraki_olasilik (DÖF sonrası düşürülmüş değer)
+        - sonraki_frekans (DÖF sonrası düşürülmüş değer)
+        - sonraki_siddet (DÖF sonrası düşürülmüş değer)
+        
+        KRİTİK KURALLAR:
+        1. DÖF sonrası Risk Skoru (O×F×Ş) KESİNLİKLE 70 veya altında olmalı!
+        2. Yeşil (≤20): Önemsiz Risk
+        3. Sarı (20-70): Olası Risk
+        4. Profesyonel ve teknik bir dil kullan.
+        5. "{workplace}" sektörüne/işyerine özel riskler üret.
+        6. Çeşitli risk seviyeleri kullan (Tolerans Gösterilemez riskler dahil et).
+        """
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7
+            )
+            
+            content = response.choices[0].message.content.strip()
+            
+            # Markdown temizliği
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            
+            batch_data = json.loads(content)
+            
+            # Liste değilse listeye çevir
+            if isinstance(batch_data, dict):
+                batch_data = [batch_data]
+                
+            all_risks.extend(batch_data)
+            
+            # Çöp toplama
+            del content
+            del response
+            gc.collect()
+            
+        except Exception as e:
+            print(f"Batch {i+1} hatası: {str(e)}")
+            # Hata olsa bile devam etmeye çalış veya duruma göre boş geç
+            continue
+            
+    return all_risks
 
 def create_excel(risk_data, workplace):
     """Excel dosyası oluştur"""
@@ -230,8 +260,8 @@ def generate():
         if not workplace:
             return jsonify({"error": "İşyeri bilgisi gerekli"}), 400
         
-        # Risk analizi al
-        risks = fetch_risks_from_openai(api_key, workplace)
+        # Risk analizi al (50 madde, 10'arlı paketler halinde)
+        risks = fetch_risks_in_batches(api_key, workplace, total_items=50, batch_size=10)
         
         # Excel oluştur
         wb = create_excel(risks, workplace)
