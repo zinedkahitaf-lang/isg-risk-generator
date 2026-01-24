@@ -216,8 +216,9 @@ def index():
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
-        data = request.json
-        workplace = data.get('workplace')
+        # JSON parse et (force=True ile Content-Type kontrolünü atla)
+        data = request.get_json(force=True, silent=True) or {}
+        workplace = data.get('workplace', '')
         
         # API key'i environment variable'dan al (güvenlik için)
         api_key = os.environ.get('OPENAI_API_KEY')
