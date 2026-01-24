@@ -194,7 +194,7 @@ def fetch_risks_in_batches(api_key, workplace, total_items=50, batch_size=10, pr
     return all_risks
 
 # === ARAYÜZ ===
-st.title("🛡️ Yapay Zeka Destekli İSG Risk Analizi")
+st.title("🛡️ İş Güvenliği Risk Analizi")
 st.markdown("İşyeri veya sektör adını girerek otomatik risk analizi oluşturun.")
 
 # API Key Kontrolü
