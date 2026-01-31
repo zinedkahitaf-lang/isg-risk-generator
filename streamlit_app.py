@@ -210,28 +210,16 @@ with col2:
 
 # API Key Kontrolü
 api_key = None
-debug_msg = []
 
 try:
     # Tüm olası key varyasyonlarını dene
     possible_keys = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "gemini_api_key", "google_api_key"]
-    found = False
     for k in possible_keys:
         if k in st.secrets:
             api_key = st.secrets[k]
-            found = True
             break
-            
-    if not found and st.secrets:
-        # Eğer secrets varsa ama bizim key yoksa, olan keyleri yazdır (değerleri gizle)
-        keys_list = list(st.secrets.keys())
-        st.warning(f"⚠️ Secrets dosyasında şu anahtarlar bulundu: {keys_list}. Ancak 'GEMINI_API_KEY' bulunamadı.")
-        
-except FileNotFoundError:
-    # Secrets dosyası hiç yoksa
-    st.info("ℹ️ Secrets dosyası bulunamadı. Manuel giriş yapılıyor.")
-except Exception as e:
-    st.error(f"⚠️ Secrets okuma hatası: {str(e)}")
+except Exception:
+    pass
 
 if not api_key:
     # Environment variable backup
@@ -242,24 +230,11 @@ if not api_key:
         api_key = st.text_input("Google Gemini API Anahtarınızı Girin:", type="password")
 
 if not api_key:
-     if st.secrets:
-          st.error("Secrets yüklü ancak uygun anahtar bulunamadı. Lütfen 'GEMINI_API_KEY' adıyla kaydedin.")
-     else:
-          st.warning("Devam etmek için Gemini API Key gereklidir.")
+     st.warning("Devam etmek için Gemini API Key gereklidir.")
      st.stop()
 
-# Model Listesini Al ve Seçim Kutusu Oluştur
-available_models = ["models/gemini-1.5-flash", "models/gemini-pro", "models/gemini-1.0-pro"] # Default fallbacks
-try:
-    genai.configure(api_key=api_key)
-    remote_models = list(genai.list_models())
-    fetched_names = [m.name for m in remote_models if 'generateContent' in m.supported_generation_methods]
-    if fetched_names:
-        available_models = fetched_names
-except Exception as e:
-    st.error(f"Model listesi alınamadı (API Key veya Bağlantı Sorunu): {e}")
-
-selected_model = st.selectbox("Kullanılacak Yapay Zeka Modeli:", available_models, index=0)
+# Varsayılan Model
+selected_model = "models/gemini-1.5-flash"
 
 with st.form("risk_form"):
     workplace = st.text_input("İşyeri / Sektör Tanımı:", placeholder="Örn: Mobilya Atölyesi, Demir Çelik Fabrikası, İnşaat Şantiyesi...")
