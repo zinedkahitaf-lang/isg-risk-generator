@@ -1,5 +1,5 @@
 import streamlit as st
-import openai
+import google.generativeai as genai
 import json
 import io
 import time
@@ -115,12 +115,13 @@ def create_excel(risk_data, workplace):
     
     return wb
 
-def fetch_risks_in_batches(api_key, workplace, total_items=50, batch_size=10, progress_bar=None, status_text=None):
+def fetch_risks_in_batches(api_key, model_name, workplace, total_items=50, batch_size=10, progress_bar=None, status_text=None):
     all_risks = []
     
-    # İstemci Ayarları
-    http_client = httpx.Client(timeout=httpx.Timeout(120.0, connect=60.0))
-    client = openai.OpenAI(api_key=api_key, http_client=http_client)
+    # Gemini Ayarlari
+    genai.configure(api_key=api_key)
+    # Seçilen modeli kullan
+    model = genai.GenerativeModel(model_name)
     
     num_batches = (total_items + batch_size - 1) // batch_size
     
@@ -167,12 +168,17 @@ def fetch_risks_in_batches(api_key, workplace, total_items=50, batch_size=10, pr
         """
         
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7
+            # count_tokens ile maliyet kontrolü yapılabilir ama şimdilik direkt generate_content
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    response_mime_type="application/json"
+                )
             )
-            content = response.choices[0].message.content.strip()
+            
+            content = response.text.strip()
+            # Bazı durumlarda yine de md block gelebilir
             if content.startswith("```json"): content = content[7:]
             if content.startswith("```"): content = content[3:]
             if content.endswith("```"): content = content[:-3]
@@ -181,7 +187,7 @@ def fetch_risks_in_batches(api_key, workplace, total_items=50, batch_size=10, pr
             if isinstance(batch_data, dict): batch_data = [batch_data]
             all_risks.extend(batch_data)
             
-            # Bellek Temizliği
+            # Bellek Temizliği gerekmez ama yine de
             del content, response
             gc.collect()
             
@@ -204,18 +210,44 @@ with col2:
 
 # API Key Kontrolü
 api_key = None
-if "OPENAI_API_KEY" in st.secrets:
-    api_key = st.secrets["OPENAI_API_KEY"]
-    # Secret varsa input GÖSTERİLMEZ, arka planda atanır.
-else:
-    api_key = st.text_input("OpenAI API Anahtarınızı Girin:", type="password")
-    if not api_key:
-        st.warning("Devam etmek için API Key gereklidir (Secrets içinde tanımlı değil).")
+try:
+    if "GEMINI_API_KEY" in st.secrets:
+        api_key = st.secrets["GEMINI_API_KEY"]
+    elif "GOOGLE_API_KEY" in st.secrets:
+        api_key = st.secrets["GOOGLE_API_KEY"]
+except Exception:
+    pass
+
+if not api_key:
+    # Environment variable backup
+    import os
+    if os.getenv("GOOGLE_API_KEY"):
+        api_key = os.getenv("GOOGLE_API_KEY")
+    else:
+        api_key = st.text_input("Google Gemini API Anahtarınızı Girin:", type="password")
+
+if not api_key:
+     st.warning("Devam etmek için Gemini API Key gereklidir.")
+     st.stop()
+
+# Model Listesini Al ve Seçim Kutusu Oluştur
+available_models = ["models/gemini-1.5-flash", "models/gemini-pro", "models/gemini-1.0-pro"] # Default fallbacks
+try:
+    genai.configure(api_key=api_key)
+    remote_models = list(genai.list_models())
+    fetched_names = [m.name for m in remote_models if 'generateContent' in m.supported_generation_methods]
+    if fetched_names:
+        available_models = fetched_names
+except Exception as e:
+    st.error(f"Model listesi alınamadı (API Key veya Bağlantı Sorunu): {e}")
+
+selected_model = st.selectbox("Kullanılacak Yapay Zeka Modeli:", available_models, index=0)
 
 with st.form("risk_form"):
     workplace = st.text_input("İşyeri / Sektör Tanımı:", placeholder="Örn: Mobilya Atölyesi, Demir Çelik Fabrikası, İnşaat Şantiyesi...")
     risk_count = st.slider("Oluşturulacak Risk Sayısı:", min_value=10, max_value=100, value=50, step=10)
     submitted = st.form_submit_button("Analizi Oluştur 🚀")
+
 
 if submitted:
     if not api_key:
@@ -227,7 +259,7 @@ if submitted:
         progress_bar = st.progress(0)
         
         try:
-            risks = fetch_risks_in_batches(api_key, workplace, total_items=risk_count, batch_size=10, progress_bar=progress_bar, status_text=status_text)
+            risks = fetch_risks_in_batches(api_key, selected_model, workplace, total_items=risk_count, batch_size=25, progress_bar=progress_bar, status_text=status_text)
             
             if risks:
                 status_text.success(f"✅ {len(risks)} adet risk başarıyla analiz edildi!")
