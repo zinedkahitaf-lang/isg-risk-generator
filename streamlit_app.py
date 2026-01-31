@@ -130,7 +130,7 @@ def fetch_risks_in_batches(api_key, model_name, workplace, total_items=50, batch
         current_batch_size = min(batch_size, total_items - len(all_risks))
         
         if status_text:
-            status_text.text(f"⏳ İşleniyor... Paket {i+1}/{num_batches} (Risk No: {start_idx}-{start_idx+current_batch_size-1})")
+            status_text.text(f"⏳ RİSK ANALİZİ OLUŞTURULUYOR... (Paket {i+1}/{num_batches})")
         if progress_bar:
             progress_bar.progress((i) / num_batches)
             
@@ -287,6 +287,7 @@ if submitted:
         st.error("Lütfen bir işyeri tanımı girin.")
     else:
         status_text = st.empty()
+        status_text.text("⏳ RİSK ANALİZİ OLUŞTURULUYOR...")
         progress_bar = st.progress(0)
         
         try:
