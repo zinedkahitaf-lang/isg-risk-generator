@@ -291,7 +291,7 @@ if submitted:
         progress_bar = st.progress(0)
         
         try:
-            risks = fetch_risks_in_batches(api_key, selected_model, workplace, total_items=risk_count, batch_size=25, progress_bar=progress_bar, status_text=status_text)
+            risks = fetch_risks_in_batches(api_key, selected_model, workplace, total_items=risk_count, batch_size=50, progress_bar=progress_bar, status_text=status_text)
             
             if risks:
                 status_text.success(f"✅ {len(risks)} adet risk başarıyla analiz edildi!")
