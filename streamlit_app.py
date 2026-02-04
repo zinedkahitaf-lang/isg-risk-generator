@@ -326,7 +326,7 @@ st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: #666;'>
-        Bu Uygulama İş Güvenliği Uzmanı(B) Fatih AKDENİZ tarafından geliştirilmiştir.
+        Bu Uygulama İş Güvenliği Uzmanı Fatih AKDENİZ tarafından geliştirilmiştir.
     </div>
     """,
     unsafe_allow_html=True
